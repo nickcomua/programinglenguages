@@ -1,4 +1,4 @@
-import { TimelineFactory } from '$lib/timelinefactory/index.js';
+import { TimelineFactory } from '$lib/components/timelinefactory/index.js';
 import { error, json } from '@sveltejs/kit';
 
 /** @type {import('./$types').RequestHandler} */
