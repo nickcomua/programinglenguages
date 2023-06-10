@@ -134,6 +134,59 @@
 		}
 	}
 
+	class Pie {
+		pieData: ConicStop[];
+		constructor() {
+			this.pieData = [];
+		}
+
+		addPiepPiece(piece: ConicStop) {
+			this.pieData.push(piece);
+		}
+
+		getPie() {
+			return this.pieData;
+		}
+	}
+
+	class PieChartAdapter extends Pie {
+		private chart: ChartJS<'line', number[]>;
+		private yearPoint: number;
+		constructor(chart: ChartJS<'line', number[]>, yearPoint: number) {
+			super();
+			this.chart = chart;
+			this.yearPoint = yearPoint;
+			this.adaptChart();
+		}
+
+		adaptChart() {
+			const formated = this.chart.data.datasets.map((point) => {
+				const val = point.data[this.chart.data.labels?.indexOf(this.yearPoint) ?? 0];
+				return isNaN(val) ? 0 : val;
+			});
+			const summa = formated.reduce((a, b) => a + b, 0);
+
+			this.pieData = (<ChartDataset<'line', number[]>[]>this.chart.config.data.datasets).reduce(
+				(current: ConicStop[], point: ChartDataset<'line', number[]>, i) => {
+					return [
+						...current,
+						...((formated[i] / summa) * 100 >= 1
+							? [
+									{
+										label: point.label,
+										color: <string>point.borderColor,
+										start: current.at(-1)?.end ?? 0,
+										end: (current.at(-1)?.end ?? 0) + (formated[i] / summa) * 100
+									}
+							  ]
+							: [])
+					];
+				},
+				[]
+			);
+		}
+	}
+
 	export let data: dataType;
 	onMount(() => {
 		if (!data.languages) {
@@ -183,7 +236,7 @@
 	// 	chartData = ;
 	// });
 
-	let conicStops: ConicStop[][] = [];
+	let conicStops: Pie[] = [];
 
 	let line: ChartJS<'line', number[]>;
 
@@ -203,93 +256,43 @@
 
 	async function rerender() {
 		// query.set('word', word);
-		await tick()
+		await tick();
 		const pageBuilder = new PageCrafter();
-		await tick()
-		const globalState = GlobalState.getInstance()
-		await tick()
+		await tick();
+		const globalState = GlobalState.getInstance();
+		await tick();
 		console.log($page.url);
-		await tick()
-		
-		pageBuilder.produceSetURL($page.url)
+		await tick();
 
-		await tick()
-		
-		pageBuilder.produceLanguages(inputChipList)
-		await tick()
+		pageBuilder.produceSetURL($page.url);
+
+		await tick();
+
+		pageBuilder.produceLanguages(inputChipList);
+		await tick();
 		globalState.set('languages', inputChipList.join(','));
-		await tick()
-		
-		pageBuilder.produceYearStart(String(yearStartListener.yearStart))
-		await tick()
-		
+		await tick();
+
+		pageBuilder.produceYearStart(String(yearStartListener.yearStart));
+		await tick();
+
 		globalState?.set('yearStart', String(yearStartListener.yearStart));
-		await tick()
-		pageBuilder.produceYearEnd(String(yearEndListener.yearEnd))
-		await tick()
-		
+		await tick();
+		pageBuilder.produceYearEnd(String(yearEndListener.yearEnd));
+		await tick();
+
 		console.log(globalState);
-		
+
 		globalState?.set('yearEnd', String(yearEndListener.yearEnd));
-		await tick()
-		
-		await tick()
-		
-		await tick()
-		goto(`?${pageBuilder.getProduct().url!.searchParams.toString()}`, { invalidateAll: true, replaceState: true });
+		await tick();
+		goto(`?${pageBuilder.getProduct().url!.searchParams.toString()}`, {
+			invalidateAll: true,
+			replaceState: true
+		});
 	}
 
 	function addPie() {
-		console.log(line);
-
-		const formated = line.data.datasets.map((point) => {
-			const val = point.data[line.data.labels?.indexOf(rangeValue) ?? 0];
-			return isNaN(val) ? 0 : val;
-		});
-
-		console.log(formated);
-
-		const summa = formated.reduce((a, b) => a + b, 0);
-
-		console.log(summa);
-
-		// console.log(
-		// 	(<ChartDataset<"line", number[]>[]>line.data.datasets).reduce(
-		// 		(current: ConicStop[], point : ChartDataset<"line", number[]>, i) => {
-		// 			console.log((current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100));
-
-		// 			return [
-		// 			...current,
-		// 			{
-		// 				label: point.label,
-		// 				color: <string>point.borderColor,
-		// 				start: current.at(-1)?.end ?? 0,
-		// 				end: (current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100)
-		// 			}
-		// 		]},
-		// 		[]
-		// 	)
-		// );
-
-		conicStops = [
-			(<ChartDataset<'line', number[]>[]>line.config.data.datasets).reduce(
-				(current: ConicStop[], point: ChartDataset<'line', number[]>, i) => {
-					console.log((current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100));
-
-					return [
-						...current,
-						{
-							label: point.label,
-							color: <string>point.borderColor,
-							start: current.at(-1)?.end ?? 0,
-							end: (current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100)
-						}
-					];
-				},
-				[]
-			),
-			...conicStops
-		];
+		conicStops = [new PieChartAdapter(line, rangeValue), ...conicStops];
 	}
 </script>
 
@@ -416,7 +419,7 @@
 	<button on:click={addPie} class="btn variant-filled"> Create pie </button>
 	<div class="flex gap-7 flex-wrap">
 		{#each conicStops as conicStop}
-			<ConicGradient stops={conicStop} legend />
+			<ConicGradient stops={conicStop.getPie()} legend />
 		{/each}
 	</div>
 </main>
