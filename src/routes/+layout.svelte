@@ -10,7 +10,6 @@
 	import PageFooter from '$lib/components/pagefootter/PageFooter.svelte';
 </script>
 
-
 <AppShell regionPage="relative" slotPageHeader="sticky top-0 z-10">
 	<svelte:fragment slot="header"><Header/></svelte:fragment>
 	<!-- (sidebarLeft) -->

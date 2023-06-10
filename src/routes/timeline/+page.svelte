@@ -1,8 +1,14 @@
 <!-- src/routes/index.svelte -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { Line } from 'svelte-chartjs';
-	import { Autocomplete, InputChip } from '@skeletonlabs/skeleton';
+	import {
+		Autocomplete,
+		InputChip,
+		RangeSlider,
+		type ConicStop,
+		ConicGradient
+	} from '@skeletonlabs/skeleton';
 	import type { AutocompleteOption } from '@skeletonlabs/skeleton';
 	import { page } from '$app/stores';
 	import {
@@ -14,12 +20,13 @@
 		LinearScale,
 		PointElement,
 		CategoryScale,
-		Colors
+		Colors,
+		type ChartDataset
 	} from 'chart.js';
 	import { goto, invalidate } from '$app/navigation';
 	import type { dataType } from './+page';
-	import { writable } from 'svelte/store';
-	import { GlobalState } from '$lib/store/mainStore';
+	import { Caretaker, GlobalState } from '$lib/store/mainStore';
+	import { PageCrafter } from '$lib/components/pageBilder';
 
 	ChartJS.register(
 		Title,
@@ -128,11 +135,10 @@
 	}
 
 	export let data: dataType;
-	onMount(()=>{
+	onMount(() => {
 		if (!data.languages) {
-			
-		}		
-	})
+		}
+	});
 	const editor = new Editor();
 	const yearEndListener = new YearEndListener(2008, 2018, Number(data.yearEnd));
 	const yearStartListener = new YearStartListener(2008, 2018, Number(data.yearStart));
@@ -146,7 +152,13 @@
 	editor.events.subscribe('yearEnd', yearEndListener);
 	editor.events.subscribe('yearStart', labelsListener);
 	editor.events.subscribe('yearEnd', labelsListener);
-	$: if (data) editor.updataData(data);
+	const caretaker = new Caretaker();
+	$: if (data) {
+		editor.updataData(data);
+
+		// caretaker.showHistory();
+		// console.log(caretaker.historyExist);
+	}
 
 	const languages =
 		'Date,Abap,Ada,C#,Cobol,Dart,Go,Groovy,Haskell,Java,JavaScript,Kotlin,Lua,Matlab,Objective-C,Perl,PHP,Powershell,Python,R,Ruby,Rust,Scala,Swift,TypeScript,VBA'
@@ -162,12 +174,18 @@
 		label: value,
 		value: value.toLocaleLowerCase().replaceAll(' ', '')
 	}));
+
+	let rangeValue = yearStartListener.yearStart;
 	// onMount(async () => {
 	// 	// let loadingPromise = new Promise(async (resolve) => {
 	// 	// 	resolve(await (await fetch('/timelinedata')).json());
 	// 	// });
 	// 	chartData = ;
 	// });
+
+	let conicStops: ConicStop[][] = [];
+
+	let line: ChartJS<'line', number[]>;
 
 	function onInputChipSelect(event: any): void {
 		console.log('onInputChipSelect', event.detail);
@@ -176,32 +194,125 @@
 			inputChip = '';
 		}
 	}
+
 	function range(start: number, end: number) {
 		start = Number(start);
 		end = Number(end) + 1;
 		return Array.from({ length: end - start }, (v, k) => k + start);
 	}
 
-	function rerender() {
-		// let query = new URLSearchParams($page?.url.toString());
-
+	async function rerender() {
 		// query.set('word', word);
-		$page.url.searchParams.set('languages', inputChipList.join(','));
-		GlobalState.getInstance().set('languages', inputChipList.join(','))
+		await tick()
+		const pageBuilder = new PageCrafter();
+		await tick()
+		const globalState = GlobalState.getInstance()
+		await tick()
+		console.log($page.url);
+		await tick()
+		
+		pageBuilder.produceSetURL($page.url)
 
-		$page.url.searchParams.set('yearStart', String(yearStartListener.yearStart));
-		GlobalState.getInstance().set('yearStart', String(yearStartListener.yearStart))
+		await tick()
+		
+		pageBuilder.produceLanguages(inputChipList)
+		await tick()
+		globalState.set('languages', inputChipList.join(','));
+		await tick()
+		
+		pageBuilder.produceYearStart(String(yearStartListener.yearStart))
+		await tick()
+		
+		globalState?.set('yearStart', String(yearStartListener.yearStart));
+		await tick()
+		pageBuilder.produceYearEnd(String(yearEndListener.yearEnd))
+		await tick()
+		
+		console.log(globalState);
+		
+		globalState?.set('yearEnd', String(yearEndListener.yearEnd));
+		await tick()
+		
+		await tick()
+		
+		await tick()
+		goto(`?${pageBuilder.getProduct().url!.searchParams.toString()}`, { invalidateAll: true, replaceState: true });
+	}
 
-		$page.url.searchParams.set('yearEnd', String(yearEndListener.yearEnd));
-		GlobalState.getInstance().set('yearEnd', String(yearEndListener.yearEnd));
+	function addPie() {
+		console.log(line);
 
-		goto(`?${$page.url.searchParams.toString()}`, { invalidateAll: true, replaceState: true });
-		// invalidate(`?${$page.url.searchParams.toString()}`)
+		const formated = line.data.datasets.map((point) => {
+			const val = point.data[line.data.labels?.indexOf(rangeValue) ?? 0];
+			return isNaN(val) ? 0 : val;
+		});
+
+		console.log(formated);
+
+		const summa = formated.reduce((a, b) => a + b, 0);
+
+		console.log(summa);
+
+		// console.log(
+		// 	(<ChartDataset<"line", number[]>[]>line.data.datasets).reduce(
+		// 		(current: ConicStop[], point : ChartDataset<"line", number[]>, i) => {
+		// 			console.log((current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100));
+
+		// 			return [
+		// 			...current,
+		// 			{
+		// 				label: point.label,
+		// 				color: <string>point.borderColor,
+		// 				start: current.at(-1)?.end ?? 0,
+		// 				end: (current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100)
+		// 			}
+		// 		]},
+		// 		[]
+		// 	)
+		// );
+
+		conicStops = [
+			(<ChartDataset<'line', number[]>[]>line.config.data.datasets).reduce(
+				(current: ConicStop[], point: ChartDataset<'line', number[]>, i) => {
+					console.log((current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100));
+
+					return [
+						...current,
+						{
+							label: point.label,
+							color: <string>point.borderColor,
+							start: current.at(-1)?.end ?? 0,
+							end: (current.at(-1)?.end ?? 0) + Math.floor((formated[i] / summa) * 100)
+						}
+					];
+				},
+				[]
+			),
+			...conicStops
+		];
 	}
 </script>
 
-<main class="seco">
-	<!-- @ts-ignore -->
+<main class="m-7">
+	<button
+		on:click={() => {
+			caretaker.undo();
+			inputChipList = GlobalState.getInstance().get('languages').split(',');
+			data = {
+				...data,
+				...GlobalState.getInstance().getAll(),
+				languages: GlobalState.getInstance().get('languages').split(',')
+			};
+			editor.updataData(data);
+			rerender();
+			// console.log(GlobalState.getInstance().getAll());
+
+			// data = GlobalState.getInstance().getAll()
+			// editor.updataData(data)
+		}}
+		class="btn variant-filled-secondary">Undo</button
+	>
+
 	<InputChip
 		bind:input={inputChip}
 		bind:value={inputChipList}
@@ -219,32 +330,43 @@
 		</div>
 		<div>
 			<span>From year</span>
-			<input
-				on:change={({ target }) => editor.updateYearStart(target?.valueAsNumber)}
-				value={yearStartListener.yearStart}
-				class="input"
-				type="number"
-				placeholder="Input"
-				min="2008"
-				max={yearEndListener.yearEnd}
-			/>
+			{#key data}
+				<input
+					on:change={({ target }) => editor.updateYearStart(target?.valueAsNumber)}
+					value={yearStartListener.yearStart}
+					class="input"
+					type="number"
+					placeholder="Input"
+					min="2008"
+					max={yearEndListener.yearEnd}
+				/>
+			{/key}
 		</div>
 		<div>
 			<span>To year</span>
-			<input
-				on:change={({ target }) => editor.updateYearEnd(target?.valueAsNumber)}
-				value={yearEndListener.yearEnd}
-				class="input"
-				type="number"
-				placeholder="Input"
-				min={yearStartListener.yearStart}
-				max="2018"
-			/>
+			{#key data}
+				<input
+					on:change={({ target }) => editor.updateYearEnd(target?.valueAsNumber)}
+					value={yearEndListener.yearEnd}
+					class="input"
+					type="number"
+					min={yearStartListener.yearStart}
+					max="2018"
+				/>
+			{/key}
 		</div>
 	</div>
-	<button on:click={rerender} type="button" class="btn variant-filled">Apply</button>
+	<button
+		on:click={() => {
+			caretaker.backup();
+			rerender();
+		}}
+		type="button"
+		class="btn variant-filled">Apply</button
+	>
 	{#key data}
 		<Line
+			bind:chart={line}
 			height="100%"
 			options={{
 				// plugins: {
@@ -279,5 +401,22 @@
 				}))
 			}}
 		/>
+		<div class="ml-12 mr-4">
+			<RangeSlider
+				name="range-slider"
+				bind:value={rangeValue}
+				min={yearStartListener.yearStart}
+				max={yearEndListener.yearEnd}
+				step={1}
+				ticked={true}
+			/>
+		</div>
 	{/key}
+
+	<button on:click={addPie} class="btn variant-filled"> Create pie </button>
+	<div class="flex gap-7 flex-wrap">
+		{#each conicStops as conicStop}
+			<ConicGradient stops={conicStop} legend />
+		{/each}
+	</div>
 </main>
